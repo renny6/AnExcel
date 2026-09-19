@@ -58,26 +58,20 @@ export async function verifySession(): Promise<SessionPayload | null> {
     const { payload } = await jwtVerify(cookie, SESSION_SECRET);
     const sessionId = payload.sessionId as string;
 
-    // Check DB to ensure session hasn't hit its absolute max lifetime (24h)
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session || session.expires_at < new Date()) {
-      return null;
-    }
-
-    // Check Redis for idle timeout
-    const existsInRedis = await redis.exists(`session:${sessionId}`);
-    if (!existsInRedis) {
+    // The JWT 'exp' claim natively enforces the absolute 24h max lifetime.
+    // If we reach here, it hasn't exceeded 24 hours.
+    
+    // Check Redis for idle timeout and revocation status
+    const professorId = await redis.get(`session:${sessionId}`);
+    if (!professorId) {
       return null;
     }
 
     // Extend idle timeout
     await redis.expire(`session:${sessionId}`, SESSION_IDLE_TIMEOUT_SEC);
     return {
-      sessionId: session.id,
-      professorId: session.professor_id,
+      sessionId,
+      professorId,
     };
   } catch (error) {
     return null;

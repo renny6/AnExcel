@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum IdentitySource {
+  test
+  real
+}
+
+enum RetentionPeriod {
+  one_week
+  two_weeks
+  one_month
+  three_months
+  six_months
+}
+
+enum BatchStatus {
+  draft
+  processing
+  ready_for_review
+  approved
+  exported
+}
+
+enum AnswerSheetStatus {
+  processing
+  needs_review
+  auto_approved
+  manual
+  failed
+  reviewed
+}
+
+enum QuestionMarkSource {
+  auto
+  corrected
+}
+
+// ----------------------------------------------------------------------------
+// MODELS
+// ----------------------------------------------------------------------------
+
+model Professor {
+  id              String         @id @default(uuid()) @db.Uuid
+  identity_source IdentitySource @default(test)
+  external_id     String
+  name            String
+  college_code    String
+  department      String
+  created_at      DateTime       @default(now())
+
+  // Relations
+  batches    Batch[]
+  audit_logs AuditLogEntry[]
+
+  @@map("professors")
+}
+
+model Batch {
+  id                    String          @id @default(uuid()) @db.Uuid
+  professor_id          String          @db.Uuid
+  declared_subject_code String
+  declared_subject_name String
+  declared_course_batch String
+  retention_period      RetentionPeriod
+  images_purge_at       DateTime?
+  status                BatchStatus     @default(draft)
+  created_at            DateTime        @default(now())
+  approved_at           DateTime?
+
+  // Relations
+  professor     Professor     @relation(fields: [professor_id], references: [id])
+  answer_sheets AnswerSheet[]
+
+  @@index([professor_id])
+  @@map("batches")
+}
+
+model AnswerSheet {
+  id                String            @id @default(uuid()) @db.Uuid
+  batch_id          String            @db.Uuid
+  image_storage_key String            @unique // Idempotency key
+  register_number   String?
+  total_marks       Decimal?          @db.Decimal(5, 2)
+  status            AnswerSheetStatus @default(processing)
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+
+  // Relations
+  batch          Batch           @relation(fields: [batch_id], references: [id])
+  question_marks QuestionMark[]
+  audit_logs     AuditLogEntry[]
+
+  @@index([batch_id])
+  @@index([register_number])
+  @@map("answer_sheets")
+}
+
+model QuestionMark {
+  id               String             @id @default(uuid()) @db.Uuid
+  answer_sheet_id  String             @db.Uuid
+  question_no      String
+  sub_part         String?
+  marks            Decimal            @db.Decimal(5, 2)
+  tick_state       Boolean
+  confidence_score Decimal            @db.Decimal(5, 4)
+  source           QuestionMarkSource @default(auto)
+
+  // Relations
+  answer_sheet AnswerSheet @relation(fields: [answer_sheet_id], references: [id])
+
+  @@map("question_marks")
+}
+
+model AuditLogEntry {
+  id              String   @id @default(uuid()) @db.Uuid
+  answer_sheet_id String   @db.Uuid
+  professor_id    String   @db.Uuid
+  field_changed   String
+  old_value       String
+  new_value       String
+  created_at      DateTime @default(now())
+
+  // Relations
+  answer_sheet AnswerSheet @relation(fields: [answer_sheet_id], references: [id])
+  professor    Professor   @relation(fields: [professor_id], references: [id])
+
+  @@map("audit_log_entries")
+}

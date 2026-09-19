@@ -33,17 +33,26 @@ export default function UploadPage() {
 
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [skippedMessage, setSkippedMessage] = useState<string | null>(null);
 
   const handleFiles = useCallback((files: FileList | File[]) => {
+    setSkippedMessage(null);
     const newItems: UploadItem[] = [];
     const filesArray = Array.from(files);
 
     // Enforce 100 limit globally
     setItems((prev) => {
       const remainingSlots = MAX_BATCH_SIZE - prev.length;
-      if (remainingSlots <= 0) return prev; // totally full
+      if (remainingSlots <= 0) {
+        setSkippedMessage(`Skipped all ${filesArray.length} files because the batch limit of ${MAX_BATCH_SIZE} was already reached.`);
+        return prev;
+      }
 
-      const allowedFiles = filesArray.slice(0, remainingSlots);
+      let allowedFiles = filesArray;
+      if (filesArray.length > remainingSlots) {
+        allowedFiles = filesArray.slice(0, remainingSlots);
+        setSkippedMessage(`Added ${allowedFiles.length} files. Skipped ${filesArray.length - allowedFiles.length} files because the batch limit of ${MAX_BATCH_SIZE} was reached.`);
+      }
       
       allowedFiles.forEach(file => {
         const item: UploadItem = {
@@ -247,6 +256,12 @@ export default function UploadPage() {
             Select Files
           </button>
         </div>
+
+        {skippedMessage && (
+          <div className="mt-4 p-4 bg-yellow-50 text-yellow-800 text-sm font-medium rounded-md border border-yellow-200">
+            {skippedMessage}
+          </div>
+        )}
 
         {items.length > 0 && (
           <div className="mt-8 bg-white shadow sm:rounded-md border border-gray-200">

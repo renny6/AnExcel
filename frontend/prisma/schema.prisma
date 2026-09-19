@@ -46,6 +46,12 @@ enum QuestionMarkSource {
   corrected
 }
 
+enum PdfUploadStatus {
+  processing
+  split
+  failed
+}
+
 // ----------------------------------------------------------------------------
 // MODELS
 // ----------------------------------------------------------------------------
@@ -95,9 +101,25 @@ model Batch {
   // Relations
   professor     Professor     @relation(fields: [professor_id], references: [id])
   answer_sheets AnswerSheet[]
+  pdf_uploads   PdfUpload[]
 
   @@index([professor_id])
   @@map("batches")
+}
+
+model PdfUpload {
+  id                String          @id @default(uuid()) @db.Uuid
+  batch_id          String          @db.Uuid
+  original_filename String
+  status            PdfUploadStatus @default(processing)
+  error_message     String?
+  created_at        DateTime        @default(now())
+
+  // Relations
+  batch Batch @relation(fields: [batch_id], references: [id])
+
+  @@index([batch_id])
+  @@map("pdf_uploads")
 }
 
 model AnswerSheet {

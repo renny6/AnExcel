@@ -1,4 +1,4 @@
-You are building MarkFlow — a tool for Anna University professors to convert scanned/photographed answer-sheet front pages into a clean Excel mark sheet, with a future SEMS submission integration.
+You are building AnExcel (if there are any metion of markflow, just know that the name has been changed to AnExcel) — a tool for Anna University professors to convert scanned/photographed answer-sheet front pages into a clean Excel mark sheet, with a future SEMS submission integration.
 
 Before writing any code, read every document in this repo, in this order, and treat them as the complete and authoritative source of truth for this build:
 

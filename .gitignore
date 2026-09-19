@@ -1,6 +1,7 @@
 # environment
 .env
 .env.local
+.env.production
 
 # node
 node_modules/
@@ -13,6 +14,24 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+*.egg-info/
+*.egg
+
+# docker
+docker-compose.override.yml
+
+# minio local data
+minio-data/
+
+# IDE
+.vscode/
+.idea/
+
+# test / coverage
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
 
 # os
 .DS_Store

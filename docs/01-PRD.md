@@ -2,7 +2,7 @@
 
 | Document 01 — PRD | |
 |---|---|
-| **App Name** | MarkFlow *(placeholder — rename freely, nothing downstream depends on this name)* |
+| **App Name** | AnExcel |
 | **Tagline** | Turn a stack of scanned answer sheets into a ready-to-submit mark list. |
 | **Problem** | After evaluating a stack of answer scripts, a professor has to manually total and re-type every student's mark into a spreadsheet, by hand, for every class and every exam. At 70–80+ students per batch this is slow, repetitive, and an easy place to make a transcription error on an official record. |
 | **Target User** | An Anna University professor who has just finished evaluating a batch of answer scripts (a single class, or several classes at once) and needs a clean digital mark list, without re-typing marks by hand. |

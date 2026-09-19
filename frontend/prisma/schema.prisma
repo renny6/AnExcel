@@ -54,6 +54,7 @@ model Professor {
   id              String         @id @default(uuid()) @db.Uuid
   identity_source IdentitySource @default(test)
   external_id     String
+  password_hash   String?  // Used only when identity_source is 'test'
   name            String
   college_code    String
   department      String
@@ -62,8 +63,21 @@ model Professor {
   // Relations
   batches    Batch[]
   audit_logs AuditLogEntry[]
+  sessions   Session[]
 
   @@map("professors")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  professor_id String   @db.Uuid
+  expires_at   DateTime
+  created_at   DateTime @default(now())
+
+  professor    Professor @relation(fields: [professor_id], references: [id], onDelete: Cascade)
+
+  @@index([professor_id])
+  @@map("sessions")
 }
 
 model Batch {

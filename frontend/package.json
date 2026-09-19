@@ -10,16 +10,24 @@
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
     "next": "^15.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "devDependencies": {
     "@prisma/client": "^6.19.3",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "prisma": "^6.19.3",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.0"
   }
 }

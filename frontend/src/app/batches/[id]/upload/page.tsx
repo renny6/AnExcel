@@ -22,6 +22,11 @@ interface UploadItem {
   hash?: string;
 }
 
+interface PendingPdf {
+  id: string;
+  original_filename: string;
+}
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_BATCH_SIZE = 100;
 const MAX_PDF_PAGES = 100;
@@ -34,6 +39,28 @@ export default function UploadPage() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [skippedMessage, setSkippedMessage] = useState<string | null>(null);
+  const [pendingPdfs, setPendingPdfs] = useState<PendingPdf[]>([]);
+
+  // Fetch status on load and periodically
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/batches/${batchId}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setPendingPdfs(data.pendingPdfs || []);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [batchId]);
+
+  import('react').then((React) => {
+    React.useEffect(() => {
+      fetchStatus();
+      const interval = setInterval(fetchStatus, 5000);
+      return () => clearInterval(interval);
+    }, [fetchStatus]);
+  });
 
   const handleFiles = useCallback((files: FileList | File[]) => {
     setSkippedMessage(null);
@@ -179,6 +206,9 @@ export default function UploadPage() {
         if (!finRes.ok) throw new Error(finData.error || 'Finalization failed');
 
         updateItem(pendingItem.id, { status: 'done', progress: 100 });
+        
+        // Refresh status to see if it added to pendingPdfs
+        if (fileType === 'application/pdf') fetchStatus();
       }
 
     } catch (err: any) {
@@ -256,6 +286,17 @@ export default function UploadPage() {
             Select Files
           </button>
         </div>
+
+        {pendingPdfs.length > 0 && (
+          <div className="mt-6 p-4 bg-blue-50 text-blue-800 text-sm font-medium rounded-md border border-blue-200">
+            <h4 className="font-semibold mb-2">Processing PDFs</h4>
+            <ul className="list-disc pl-5 space-y-1">
+              {pendingPdfs.map(pdf => (
+                <li key={pdf.id}>{pdf.original_filename} (Processing, sheets will appear shortly...)</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {skippedMessage && (
           <div className="mt-4 p-4 bg-yellow-50 text-yellow-800 text-sm font-medium rounded-md border border-yellow-200">

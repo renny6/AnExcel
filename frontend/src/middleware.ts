@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
 
-const SESSION_SECRET = new TextEncoder().encode(process.env.SESSION_SECRET || 'dev-session-secret-change-in-production');
 const COOKIE_NAME = 'anexcel_session';
 
 export async function middleware(request: NextRequest) {
@@ -20,8 +18,15 @@ export async function middleware(request: NextRequest) {
     }
 
     try {
-      // Very basic structural check. Full DB verification happens on page load or API route via session.ts
-      await jwtVerify(cookie, SESSION_SECRET);
+      // Fetch the internal verify API to check Redis revocation
+      const verifyUrl = new URL('/api/auth/verify', request.url);
+      const res = await fetch(verifyUrl.toString(), {
+        headers: { cookie: `${COOKIE_NAME}=${cookie}` },
+      });
+
+      if (!res.ok) {
+        throw new Error('Revoked or invalid session');
+      }
     } catch (e) {
       if (pathname.startsWith('/api')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

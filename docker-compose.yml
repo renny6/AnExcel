@@ -122,6 +122,7 @@ services:
       - "8000:8000"
     volumes:
       - ./processing-service/app:/app/app
+      - ./processing-service/templates:/app/templates
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -148,6 +149,7 @@ services:
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
     volumes:
       - ./processing-service/app:/app/app
+      - ./processing-service/templates:/app/templates
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}

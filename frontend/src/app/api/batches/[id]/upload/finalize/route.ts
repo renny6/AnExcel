@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { verifySession } from '@/lib/auth/session';
-import { redis } from '@/lib/redis';
-import { S3Client } from '@aws-sdk/client-s3';
-import { v4 as uuidv4 } from 'uuid';
+
+// Internal URL for the processing service within the Docker network
+const PROCESSING_SERVICE_URL = process.env.PROCESSING_SERVICE_URL || 'http://processing-service:8000';
 
 export async function POST(request: Request, context: { params: { id: string } }) {
   const session = await verifySession();
@@ -40,21 +40,33 @@ export async function POST(request: Request, context: { params: { id: string } }
         data: {
           batch_id: batch.id,
           original_filename: fileName,
+          storage_key: storageKey,
           status: 'processing',
         }
       });
 
-      // Enqueue async split job to Celery
-      const pdfJobPayload = {
-        task: 'split_pdf',
-        id: uuidv4(),
-        args: [{
+      // Enqueue split job via processing-service HTTP trigger
+      // This uses celery_app.send_task() on the Python side for proper
+      // Celery message serialization (not raw Redis push).
+      const triggerResponse = await fetch(`${PROCESSING_SERVICE_URL}/trigger/split-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           batch_id: batch.id,
           pdf_id: pdfUpload.id,
-          storage_key: storageKey
-        }]
-      };
-      await redis.lpush('celery', JSON.stringify(pdfJobPayload));
+          storage_key: storageKey,
+        }),
+      });
+
+      if (!triggerResponse.ok) {
+        console.error('Failed to trigger split-pdf:', await triggerResponse.text());
+        // Update PDF status to failed so the UI can show the error
+        await prisma.pdfUpload.update({
+          where: { id: pdfUpload.id },
+          data: { status: 'failed', error_message: 'Failed to enqueue processing job' },
+        });
+        return NextResponse.json({ error: 'Failed to enqueue processing' }, { status: 502 });
+      }
 
       return NextResponse.json({ success: true, pdfId: pdfUpload.id });
     }
@@ -69,19 +81,22 @@ export async function POST(request: Request, context: { params: { id: string } }
       },
     });
 
-    // Enqueue real job to Redis for Phase 5 worker
-    const jobPayload = {
-      task: 'process_sheet',
-      id: uuidv4(),
-      args: [{
+    // Enqueue processing job via processing-service HTTP trigger
+    const triggerResponse = await fetch(`${PROCESSING_SERVICE_URL}/trigger/process-sheet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         batch_id: batch.id,
         sheet_id: sheet.id,
-        storage_key: storageKey
-      }]
-    };
-    
-    // push to 'celery' list
-    await redis.lpush('celery', JSON.stringify(jobPayload));
+        storage_key: storageKey,
+      }),
+    });
+
+    if (!triggerResponse.ok) {
+      console.error('Failed to trigger process-sheet:', await triggerResponse.text());
+      // Don't fail the whole request — the sheet is created, it just needs
+      // manual re-triggering or will be picked up by a retry mechanism.
+    }
 
     return NextResponse.json({ success: true, sheetId: sheet.id });
   } catch (error) {

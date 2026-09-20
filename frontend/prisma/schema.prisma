@@ -111,6 +111,7 @@ model PdfUpload {
   id                String          @id @default(uuid()) @db.Uuid
   batch_id          String          @db.Uuid
   original_filename String
+  storage_key       String?         // S3/MinIO key where the PDF is stored
   status            PdfUploadStatus @default(processing)
   error_message     String?
   created_at        DateTime        @default(now())
@@ -126,6 +127,7 @@ model AnswerSheet {
   id                String            @id @default(uuid()) @db.Uuid
   batch_id          String            @db.Uuid
   image_storage_key String            @unique // Idempotency key
+  original_filename String?           // Source filename from upload
   register_number   String?
   total_marks       Decimal?          @db.Decimal(5, 2)
   status            AnswerSheetStatus @default(processing)
@@ -155,6 +157,8 @@ model QuestionMark {
   // Relations
   answer_sheet AnswerSheet @relation(fields: [answer_sheet_id], references: [id])
 
+  // Idempotency: allows ON CONFLICT upsert on retried jobs
+  @@unique([answer_sheet_id, question_no, sub_part])
   @@map("question_marks")
 }
 

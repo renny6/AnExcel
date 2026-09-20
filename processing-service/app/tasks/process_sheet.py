@@ -57,8 +57,14 @@ def align_image(scan_bytes: bytes) -> tuple[np.ndarray | None, float]:
     # Decode scan image
     img_array = np.frombuffer(scan_bytes, dtype=np.uint8)
     scan_color = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
     if scan_color is None:
+        logger.error("Failed to decode image bytes")
         return None, 0.0
+
+    # Resize scan to canonical dimensions before alignment to ensure
+    # ORB feature scale roughly matches the template scale.
+    scan_color = cv2.resize(scan_color, (CANONICAL_WIDTH, CANONICAL_HEIGHT))
 
     scan_gray = cv2.cvtColor(scan_color, cv2.COLOR_BGR2GRAY)
 
@@ -73,16 +79,11 @@ def align_image(scan_bytes: bytes) -> tuple[np.ndarray | None, float]:
         return None, 0.0
 
     # Match features using BFMatcher with Hamming distance
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-    matches = bf.knnMatch(scan_desc, template_desc, k=2)
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(scan_desc, template_desc)
 
-    # Apply Lowe's ratio test
-    good_matches = []
-    for match_pair in matches:
-        if len(match_pair) == 2:
-            m, n = match_pair
-            if m.distance < 0.75 * n.distance:
-                good_matches.append(m)
+    # Filter matches by distance (Hamming distance < 50 is typically a good match)
+    good_matches = [m for m in matches if m.distance < 50]
 
     total_features = max(len(scan_kp), 1)
     match_ratio = len(good_matches) / total_features
@@ -141,13 +142,15 @@ Extract the following information and return it as valid JSON with this exact st
 {
   "register_number": "<string>",
   "register_number_confidence": <float 0.0-1.0>,
+  "register_number_note": "<string or null (include for confidence < 0.9)>",
   "questions": [
     {
       "question_no": "<string>",
       "sub_part": "<string or null>",
       "marks": <number>,
       "tick_state": <boolean>,
-      "confidence": <float 0.0-1.0>
+      "confidence": <float 0.0-1.0>,
+      "confidence_note": "<string or null (include for confidence < 0.9)>"
     }
   ],
   "part_a_total": <number or null>,
@@ -159,9 +162,12 @@ Rules:
 - For Part A questions (1-10), sub_part is null, marks should be 2 if ticked.
 - For Part B & C questions (11-16), sub_part is "a" or "b".
 - tick_state is true if the question was attempted (tick mark present).
-- confidence is your certainty about each field (0.0 = guess, 1.0 = certain).
-- register_number_confidence is your certainty about the register number.
-- If a field is unreadable, set confidence to 0.0 and use your best guess.
+- Both `confidence` and `register_number_confidence` represent your certainty. For ALL confidence scores, assign a value based on this rubric — do not default to a high score by habit or field type:
+  0.95-1.0: Mark/Digit is completely unambiguous, cleanly written, matches exactly one plausible reading.
+  0.80-0.94: Legible but with minor pen bleed, faint strokes, or slight ambiguity a careful reader would still resolve confidently.
+  0.50-0.79: Genuinely ambiguous — could plausibly be read more than one way, overlapping ink, a visible correction/strikethrough, or the mark crosses outside its cell.
+  Below 0.50: Illegible or contradictory — you are effectively guessing.
+- If ANY confidence score is < 0.9, provide a brief explanation in the corresponding note field (`confidence_note` or `register_number_note`). Examples: 'faint ink', 'overlapping strikethrough', 'digit 5 looks like a 6'.
 - Return ONLY the JSON, no markdown formatting or explanation."""
 
 
@@ -187,9 +193,12 @@ def extract_with_gemini(
     # Acquire rate limiter slot
     rate_limiter.acquire(max_rpm=15)
 
+    import time
+    logger.info("Calling Gemini API...")
+    start_time = time.time()
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",
             contents=[
                 genai_types.Content(
                     parts=[
@@ -217,6 +226,7 @@ def extract_with_gemini(
         raise
 
     # Parse the response
+    logger.info(f"Raw Gemini Response: {response.text}")
     response_text = response.text.strip()
 
     # Strip markdown code fences if present
@@ -371,19 +381,62 @@ def process_sheet(self, payload: dict):
         questions = extracted.get("questions", [])
 
         reg_confidence = extracted.get("register_number_confidence", 0.0)
-        if reg_confidence < CONFIDENCE_THRESHOLD:
+        reg_note = extracted.get("register_number_note")
+        if reg_confidence <= CONFIDENCE_THRESHOLD or reg_note:
             all_confident = False
             logger.info(
-                "Register number confidence %.3f < threshold %.3f",
-                reg_confidence, CONFIDENCE_THRESHOLD,
+                "Register number needs review: conf=%.3f, note=%s",
+                reg_confidence, reg_note
             )
 
         for q in questions:
-            if q.get("confidence", 0.0) < CONFIDENCE_THRESHOLD:
+            q_conf = q.get("confidence", 0.0)
+            q_note = q.get("confidence_note")
+            if q_conf <= CONFIDENCE_THRESHOLD or q_note:
                 all_confident = False
+                logger.info(
+                    "Question %s needs review: conf=%.3f, note=%s",
+                    q.get("question_no"), q_conf, q_note
+                )
                 break
 
         # Determine final status
+        register_number = extracted.get("register_number", "")
+        reg_str = str(register_number).strip() if register_number else ""
+        
+        # Structural validation for register number (must be exactly 10 digits)
+        if len(reg_str) != 10 or not reg_str.isdigit():
+            all_confident = False
+            logger.warning(
+                "Register number structural check failed: expected 10 digits, got '%s'",
+                reg_str
+            )
+        else:
+            # Derive 8-digit prefix from sibling sheets' confirmed prefixes
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT SUBSTRING(register_number, 1, 8) as prefix, COUNT(*) as cnt
+                        FROM answer_sheets
+                        WHERE batch_id = %s AND status IN ('auto_approved', 'reviewed') AND register_number IS NOT NULL
+                        GROUP BY prefix
+                        ORDER BY cnt DESC
+                        LIMIT 1
+                        """,
+                        (batch_id,)
+                    )
+                    prefix_row = cur.fetchone()
+
+            if prefix_row and prefix_row.get("prefix"):
+                expected_prefix = prefix_row["prefix"]
+                if not reg_str.startswith(expected_prefix):
+                    all_confident = False
+                    logger.warning(
+                        "Register number prefix check failed: '%s' does not start with sibling prefix '%s'",
+                        reg_str, expected_prefix
+                    )
+
         if is_valid and all_confident:
             status = "auto_approved"
         else:

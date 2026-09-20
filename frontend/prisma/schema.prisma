@@ -164,7 +164,7 @@ model QuestionMark {
 
 model AuditLogEntry {
   id              String   @id @default(uuid()) @db.Uuid
-  answer_sheet_id String   @db.Uuid
+  answer_sheet_id String?  @db.Uuid
   professor_id    String   @db.Uuid
   field_changed   String
   old_value       String
@@ -172,8 +172,8 @@ model AuditLogEntry {
   created_at      DateTime @default(now())
 
   // Relations
-  answer_sheet AnswerSheet @relation(fields: [answer_sheet_id], references: [id])
-  professor    Professor   @relation(fields: [professor_id], references: [id])
+  answer_sheet AnswerSheet? @relation(fields: [answer_sheet_id], references: [id], onDelete: SetNull)
+  professor    Professor    @relation(fields: [professor_id], references: [id])
 
   @@map("audit_log_entries")
 }

@@ -12,7 +12,7 @@ export default function NewBatchPage() {
     declared_subject_code: '',
     declared_subject_name: '',
     declared_course_batch: '',
-    retention_period: '3_months'
+    retention_period: 'three_months'
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -112,11 +112,11 @@ export default function NewBatchPage() {
               value={formData.retention_period}
               onChange={handleChange}
             >
-              <option value="1_week">1 Week</option>
-              <option value="2_weeks">2 Weeks</option>
-              <option value="1_month">1 Month</option>
-              <option value="3_months">3 Months</option>
-              <option value="6_months">6 Months</option>
+              <option value="one_week">1 Week</option>
+              <option value="two_weeks">2 Weeks</option>
+              <option value="one_month">1 Month</option>
+              <option value="three_months">3 Months</option>
+              <option value="six_months">6 Months</option>
             </select>
           </div>
 

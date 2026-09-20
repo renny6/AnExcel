@@ -4,17 +4,26 @@ import { verifySession } from '@/lib/auth/session';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+const s3Endpoint = process.env.S3_PUBLIC_ENDPOINT;
+const s3AccessKey = process.env.S3_ACCESS_KEY;
+const s3SecretKey = process.env.S3_SECRET_KEY;
+const s3Bucket = process.env.S3_BUCKET;
+
+if (!s3Endpoint || !s3AccessKey || !s3SecretKey || !s3Bucket) {
+  throw new Error('Missing required S3 environment variables (S3_PUBLIC_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET)');
+}
+
 const s3Client = new S3Client({
   region: 'us-east-1', // MinIO default
-  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000',
+  endpoint: s3Endpoint,
   credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY || 'anexcel_minio_admin',
-    secretAccessKey: process.env.MINIO_SECRET_KEY || 'anexcel_minio_pass',
+    accessKeyId: s3AccessKey,
+    secretAccessKey: s3SecretKey,
   },
   forcePathStyle: true,
 });
 
-const BUCKET_NAME = process.env.MINIO_BUCKET || 'anexcel-storage';
+const BUCKET_NAME = s3Bucket;
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_BATCH_SIZE = 100;
 

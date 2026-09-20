@@ -37,7 +37,9 @@ export default async function BatchesDashboard() {
                   <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-blue-600 truncate">
-                        {batch.declared_subject_code} - {batch.declared_subject_name}
+                        <Link href={`/batches/${batch.id}`} className="hover:underline">
+                          {batch.declared_subject_code} - {batch.declared_subject_name}
+                        </Link>
                       </p>
                       <div className="ml-2 flex-shrink-0 flex">
                         <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">

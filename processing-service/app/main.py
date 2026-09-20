@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.celery_app import celery_app
+from app.routers import export
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ app = FastAPI(
     description="Answer-sheet extraction pipeline API",
     version="0.1.0",
 )
+
+app.include_router(export.router)
 
 
 # ---------------------------------------------------------------------------

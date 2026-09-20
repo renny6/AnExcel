@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import heic2any from 'heic2any';
 import imageCompression from 'browser-image-compression';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -54,13 +53,11 @@ export default function UploadPage() {
     }
   }, [batchId]);
 
-  import('react').then((React) => {
-    React.useEffect(() => {
-      fetchStatus();
-      const interval = setInterval(fetchStatus, 5000);
-      return () => clearInterval(interval);
-    }, [fetchStatus]);
-  });
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
 
   const handleFiles = useCallback((files: FileList | File[]) => {
     setSkippedMessage(null);
@@ -136,6 +133,7 @@ export default function UploadPage() {
       else if (fileType.startsWith('image/')) {
         // HEIC Conversion
         if (fileName.toLowerCase().endsWith('.heic') || fileName.toLowerCase().endsWith('.heif')) {
+          const heic2any = (await import('heic2any')).default;
           const converted = await heic2any({
             blob: pendingItem.originalFile,
             toType: 'image/jpeg',
@@ -255,9 +253,14 @@ export default function UploadPage() {
           </div>
           <button
             onClick={() => router.push('/batches')}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            disabled={items.some(i => i.status === 'pending' || i.status === 'processing' || i.status === 'uploading')}
+            className={`px-4 py-2 border rounded-md shadow-sm text-sm font-medium ${
+              items.some(i => i.status === 'pending' || i.status === 'processing' || i.status === 'uploading')
+                ? 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed'
+                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+            }`}
           >
-            Done
+            {items.some(i => i.status === 'pending' || i.status === 'processing' || i.status === 'uploading') ? 'Uploading...' : 'Done'}
           </button>
         </div>
 
